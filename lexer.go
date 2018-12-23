@@ -432,22 +432,20 @@ func startWithAt(s *Scanner) (tok int, pos Pos, lit string) {
 	s.r.inc()
 	ch1 := s.r.peek()
 	if ch1 == '\'' || ch1 == '"' {
-		nTok, nPos, nLit := startString(s)
+		nTok, _, nLit := startString(s)
 		if nTok == stringLit {
 			tok = singleAtIdentifier
-			pos = nPos
 			lit = nLit
 		} else {
-			tok = int('@')
+			tok = nTok
 		}
 	} else if ch1 == '`' {
-		nTok, nPos, nLit := scanQuotedIdent(s)
+		nTok, _, nLit := scanQuotedIdent(s)
 		if nTok == quotedIdentifier {
 			tok = singleAtIdentifier
-			pos = nPos
 			lit = nLit
 		} else {
-			tok = int('@')
+			tok = nTok
 		}
 	} else if isUserVarChar(ch1) {
 		s.r.incAsLongAs(isUserVarChar)
@@ -455,17 +453,29 @@ func startWithAt(s *Scanner) (tok int, pos Pos, lit string) {
 	} else if ch1 == '@' {
 		s.r.inc()
 		stream := s.r.s[pos.Offset+2:]
+		var prefix string
 		for _, v := range []string{"global.", "session.", "local."} {
 			if len(v) > len(stream) {
 				continue
 			}
 			if strings.EqualFold(stream[:len(v)], v) {
+				prefix = v
 				s.r.incN(len(v))
 				break
 			}
 		}
-		s.r.incAsLongAs(isIdentChar)
-		tok, lit = doubleAtIdentifier, s.r.data(&pos)
+		if s.r.peek() == '`' {
+			nTok, _, nLit := scanQuotedIdent(s)
+			if nTok == quotedIdentifier {
+				tok = doubleAtIdentifier
+				lit = "@@" + prefix + nLit
+			} else {
+				tok = nTok
+			}
+		} else {
+			s.r.incAsLongAs(isIdentChar)
+			tok, lit = doubleAtIdentifier, s.r.data(&pos)
+		}
 	} else {
 		tok, lit = singleAtIdentifier, s.r.data(&pos)
 	}
